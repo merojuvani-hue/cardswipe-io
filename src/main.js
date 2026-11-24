@@ -170,7 +170,9 @@ document.querySelectorAll('.skin-option').forEach(button => button.addEventListe
 }));
 
 const config = {
-  type: Phaser.AUTO,
+  // The arena uses vector shapes and does not need shaders; Canvas avoids
+  // WebGL framebuffer failures on browsers and GPUs with incomplete targets.
+  type: Phaser.CANVAS,
   parent: 'game',
   backgroundColor: '#090d19',
   scale: { mode: Phaser.Scale.RESIZE, width: window.innerWidth, height: window.innerHeight, autoCenter: Phaser.Scale.CENTER_BOTH },
