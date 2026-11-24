@@ -40,7 +40,7 @@ function onPointerDown(event) {
   const slot = Number(cardEl.dataset.slot);
   drag = { slot, key: cardEl.dataset.card, pointerId: event.pointerId, moved: false, startX: event.clientX, startY: event.clientY };
   cardEl.classList.add('dragging');
-  $('cast-ghost').textContent = 'DRAG INTO ARENA TO AIM · DROP ON ANOTHER CARD TO FUSE';
+  $('cast-ghost').textContent = 'DRAG TO CAST · DROP ON A CARD TO FUSE';
   $('cast-ghost').classList.remove('hidden');
   try { cardEl.setPointerCapture(event.pointerId); } catch { /* document listeners remain available */ }
 }
@@ -50,7 +50,11 @@ function onPointerMove(event) {
   const travel = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
   if (travel > 10) drag.moved = true;
   const target = document.elementFromPoint(event.clientX, event.clientY);
-  handRoot.querySelectorAll('.spell-card').forEach(el => el.classList.toggle('fusion-pop', Boolean(target?.closest('.spell-card') && target.closest('.spell-card') !== el)));
+  const fusionTarget = target?.closest('.spell-card[data-card]');
+  handRoot.querySelectorAll('.spell-card').forEach(el => el.classList.toggle('fusion-target', el === fusionTarget && Number(fusionTarget?.dataset.slot) !== drag.slot));
+  $('cast-ghost').textContent = fusionTarget && Number(fusionTarget.dataset.slot) !== drag.slot
+    ? `FUSE WITH ${fusionTarget.querySelector('.card-name')?.textContent || 'CARD'}`
+    : 'RELEASE TO CAST · DROP ON A CARD TO FUSE';
   if (event.clientY < window.innerHeight - 125) {
     const worldPoint = pointToWorld(event.clientX, event.clientY);
     if (worldPoint) phaserGame.events.emit('ui:aim', { worldPoint, card: drag.key });
@@ -64,7 +68,7 @@ function onPointerUp(event) {
   const from = drag.slot;
   const source = drag;
   drag = null;
-  document.querySelectorAll('.spell-card').forEach(el => el.classList.remove('dragging', 'fusion-pop'));
+  document.querySelectorAll('.spell-card').forEach(el => el.classList.remove('dragging', 'fusion-target'));
   $('cast-ghost').classList.add('hidden');
   const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.spell-card[data-card]');
   if (target && Number(target.dataset.slot) !== from) {
@@ -86,10 +90,18 @@ function onPointerUp(event) {
   }
 }
 
+function cancelCardDrag(event) {
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  drag = null;
+  document.querySelectorAll('.spell-card').forEach(el => el.classList.remove('dragging', 'fusion-target'));
+  $('cast-ghost').classList.add('hidden');
+  phaserGame.events.emit('ui:aim-cancel');
+}
+
 handRoot.addEventListener('pointerdown', onPointerDown);
 document.addEventListener('pointermove', onPointerMove, { passive: false });
 document.addEventListener('pointerup', onPointerUp);
-document.addEventListener('pointercancel', onPointerUp);
+document.addEventListener('pointercancel', cancelCardDrag);
 
 const moveStick = $('move-stick');
 const stickBase = moveStick.querySelector('.stick-base');

@@ -20,6 +20,7 @@ export default class ArenaScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, WORLD, WORLD);
     this.drawFloor();
     this.obstacles = this.physics.add.staticGroup();
+    this.obstacleRects = [];
     this.createObstacles();
     this.player = this.add.circle(WORLD / 2, WORLD / 2, 22, this.skin.hex, 1);
     this.physics.add.existing(this.player);
@@ -38,11 +39,16 @@ export default class ArenaScene extends Phaser.Scene {
     this.physics.add.collider(this.enemiesGroup, this.obstacles);
     this.physics.add.overlap(this.projectiles, this.enemiesGroup, (shot, enemy) => this.spellHit(shot, enemy), undefined, this);
     this.physics.add.overlap(this.enemyShots, this.player, (player, shot) => this.enemyShotHit(player, shot), undefined, this);
+    this.physics.add.collider(this.projectiles, this.obstacles, (shot, obstacle) => this.projectileObstacleHit(shot, obstacle), undefined, this);
+    this.physics.add.collider(this.enemyShots, this.obstacles, shot => this.killProjectile(shot), undefined, this);
     this.physics.add.overlap(this.player, this.orbs, (_player, orb) => this.collectOrb(orb), undefined, this);
     this.createEnemies(); this.createOrbs(22);
     this.aimGraphics = this.add.graphics().setDepth(12);
     this.fxGraphics = this.add.graphics().setDepth(11);
     this.electricGraphics = this.add.graphics().setDepth(7);
+    this.botTelegraphs = this.add.graphics().setDepth(9);
+    this.actorShadowGraphics = this.add.graphics().setDepth(2);
+    this.actorDetailGraphics = this.add.graphics().setDepth(8);
     this.cameras.main.setBounds(0, 0, WORLD, WORLD).startFollow(this.player, true, 0.085, 0.085).setZoom(this.getZoom());
     this.keys = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT');
     this.input.on('pointerdown', pointer => {
@@ -96,10 +102,20 @@ export default class ArenaScene extends Phaser.Scene {
     ];
     for (const [x,y,w,h] of positions) {
       const color = Phaser.Math.RND.pick([0x19354b,0x2d234a,0x3b2a38]);
-      const block = this.add.rectangle(x,y,w,h,color,0.94).setStrokeStyle(2,0x54728c,0.55).setDepth(1);
-      this.physics.add.existing(block,true); block.body.setSize(w,h); this.obstacles.add(block);
-      const notch = this.add.rectangle(x-w/2+6,y-h/2+6,Math.min(18,w/3),3,0x65e7f1,0.62).setDepth(2);
-      block.notch = notch;
+      const body = this.add.rectangle(x,y,w,h,0x000000,0).setDepth(-1);
+      this.physics.add.existing(body,true); body.body.setSize(w,h); this.obstacles.add(body);
+      this.obstacleRects.push({x,y,w,h});
+
+      // Layered faces and a soft shadow give each collider a readable 2.5D silhouette.
+      const visual=this.add.graphics().setDepth(3+y/WORLD*2), halfW=w/2,halfH=h/2,extrude=15;
+      visual.fillStyle(0x020510,0.34).fillEllipse(x+5,y+15,w+30,h+30);
+      visual.fillStyle(0x070a13,0.88).beginPath().moveTo(x-halfW,y+halfH-2).lineTo(x+halfW,y+halfH-2).lineTo(x+halfW,y+halfH+extrude).lineTo(x-halfW,y+halfH+extrude).closePath().fillPath();
+      visual.fillStyle(0x111827,0.78).beginPath().moveTo(x+halfW-2,y-halfH).lineTo(x+halfW+10,y-halfH+7).lineTo(x+halfW+10,y+halfH+extrude).lineTo(x+halfW-2,y+halfH).closePath().fillPath();
+      visual.fillStyle(color,0.98).fillRect(x-halfW,y-halfH,w,h);
+      visual.fillStyle(0xffffff,0.06).fillRect(x-halfW+3,y-halfH+3,w-6,Math.max(8,h*0.18));
+      visual.lineStyle(2,0x6c93b1,0.62).strokeRect(x-halfW,y-halfH,w,h);
+      visual.lineStyle(2,0x65e7f1,0.64).beginPath().moveTo(x-halfW+8,y-halfH+8).lineTo(x-halfW+Math.min(28,w/3),y-halfH+8).strokePath();
+      visual.lineStyle(1,0x000000,0.36).beginPath().moveTo(x-halfW,y+halfH).lineTo(x+halfW,y+halfH).strokePath();
     }
   }
 
@@ -110,7 +126,7 @@ export default class ArenaScene extends Phaser.Scene {
       const x = clamp(this.player.x + Math.cos(angle)*radius,100,WORLD-100), y = clamp(this.player.y + Math.sin(angle)*radius,100,WORLD-100);
       const enemy = this.add.circle(x,y,18,COLORS[i],1).setStrokeStyle(2,0xffffff,0.7).setDepth(4);
       this.physics.add.existing(enemy); enemy.body.setCircle(16).setCollideWorldBounds(true).setDamping(true).setDrag(700).setMaxVelocity(100,100);
-      enemy.hp = 70; enemy.maxHp = 70; enemy.alive = true; enemy.name = NAMES[i]; enemy.color = COLORS[i]; enemy.score = 0; enemy.kills = 0; enemy.attackWait = Phaser.Math.Between(600,1500); enemy.slowUntil = 0; enemy.lastShot = 0;
+      enemy.hp = 70; enemy.maxHp = 70; enemy.alive = true; enemy.name = NAMES[i]; enemy.color = COLORS[i]; enemy.aiSlot=i; enemy.orbitDirection=i%2?1:-1; enemy.flankRadius=Phaser.Math.Between(240,360); enemy.score = 0; enemy.kills = 0; enemy.attackWait = Phaser.Math.Between(900,1700); enemy.slowUntil = 0; enemy.lastShot = 0;
       enemy.label = this.add.text(x,y-34,enemy.name,{fontFamily:'Space Mono',fontSize:'9px',color:'#e7efff',stroke:'#080b16',strokeThickness:3}).setOrigin(0.5).setDepth(8);
       enemy.hpGraphics = this.add.graphics().setDepth(8); this.enemiesGroup.add(enemy); this.enemies.push(enemy);
     }
@@ -131,8 +147,9 @@ export default class ArenaScene extends Phaser.Scene {
     this.playerName = payload.name?.trim() || 'Player'; this.skin = payload.skin || this.skin;
     this.player.setFillStyle(this.skin.hex); this.player.setStrokeStyle(2,0xffffff,0.85); this.playerAura.setFillStyle(this.skin.hex,0.13).setStrokeStyle(2,this.skin.hex,0.8);
     this.playerLabel.setText(this.playerName);
+    this.clearProjectiles();
     this.player.body.setVelocity(0); this.player.body.checkCollision.none=false; this.physics.world.timeScale=1; this.virtualKeys={x:0,y:0}; this.joystick.active=false; this.playerHp=100; this.score=0; this.kills=0; this.elapsed=0; this.gameLive=true;
-    this.hand=[]; this.cooldowns.clear(); this.enemies.forEach((e,i)=>{e.alive=true;e.hp=e.maxHp;e.score=0;e.kills=0;e.setVisible(true);e.body.enable=true;e.body.setVelocity(0);e.slowUntil=0;e.label.setVisible(true);e.hpGraphics.setVisible(true);});
+    this.hand=[]; this.cooldowns.clear(); this.enemies.forEach((e,i)=>{e.alive=true;e.hp=e.maxHp;e.score=0;e.kills=0;e.setVisible(true);e.body.enable=true;e.body.setVelocity(0);e.slowUntil=0;e.attackWait=Phaser.Math.Between(900,1700);e.setDepth(4+e.y/WORLD*2);e.label.setVisible(true);e.hpGraphics.setVisible(true);});
     this.enemiesGroup.children.iterate(e=>{if(e){e.setVisible(true);e.body.enable=true;}});
     const deck=['fireball','frost','volt','blink','nova'];
     this.hand=Array.from({length:3},()=>Phaser.Utils.Array.GetRandom(deck));
@@ -145,24 +162,55 @@ export default class ArenaScene extends Phaser.Scene {
     const x = (this.keys.A.isDown||this.keys.LEFT.isDown?-1:0)+(this.keys.D.isDown||this.keys.RIGHT.isDown?1:0)+this.virtualKeys.x;
     const y = (this.keys.W.isDown||this.keys.UP.isDown?-1:0)+(this.keys.S.isDown||this.keys.DOWN.isDown?1:0)+this.virtualKeys.y;
     const mag=Math.hypot(x,y); if(mag>0.1) this.player.body.setAcceleration((x/mag)*520,(y/mag)*520); else this.player.body.setAcceleration(0,0);
-    this.playerAura.setPosition(this.player.x,this.player.y); this.playerLabel.setPosition(this.player.x,this.player.y+30);
+    this.player.setDepth(4+this.player.y/WORLD*2); this.playerAura.setPosition(this.player.x,this.player.y); this.playerLabel.setPosition(this.player.x,this.player.y+30);
+    this.actorShadowGraphics.clear(); this.actorDetailGraphics.clear(); this.botTelegraphs.clear();
+    this.actorShadowGraphics.fillStyle(0x02040b,0.36).fillEllipse(this.player.x+4,this.player.y+16,48,20);
+    const playerAngle=this.aimPoint?Phaser.Math.Angle.Between(this.player.x,this.player.y,this.aimPoint.x,this.aimPoint.y):(mag>0.1?Math.atan2(y,x):(this.playerFacing||0));
+    if(mag>0.1||this.aimPoint)this.playerFacing=playerAngle;
+    this.actorDetailGraphics.lineStyle(2,this.skin.hex,0.46).strokeCircle(this.player.x,this.player.y,25);
+    this.drawFacingMark(this.actorDetailGraphics,this.player.x,this.player.y,playerAngle,22,0xf4ffff);
     for(const enemy of this.enemies){
       enemy.label.setPosition(enemy.x,enemy.y-34); enemy.hpGraphics.clear();
       if(!enemy.alive) continue;
+      enemy.setDepth(4+enemy.y/WORLD*2);
       enemy.hpGraphics.fillStyle(0x101725,0.88).fillRect(enemy.x-19,enemy.y-27,38,4);
       enemy.hpGraphics.fillStyle(enemy.hp>25?0x64f4c2:0xff6277,1).fillRect(enemy.x-19,enemy.y-27,38*clamp(enemy.hp/enemy.maxHp,0,1),4);
       const dist=Phaser.Math.Distance.Between(enemy.x,enemy.y,this.player.x,this.player.y), angle=Phaser.Math.Angle.Between(enemy.x,enemy.y,this.player.x,this.player.y);
-      if(this.elapsed<enemy.slowUntil) enemy.body.setVelocity(enemy.body.velocity.x*0.94,enemy.body.velocity.y*0.94);
-      else if(dist>125){
-        // Rivals deliberately close on the player, but with a lower top speed.
-        enemy.body.setAcceleration(Math.cos(angle)*300,Math.sin(angle)*300);
-      } else {
-        // Circle at close range instead of fleeing, keeping the player in combat.
-        const strafe=(enemy.name.length%2?1:-1);
-        enemy.body.setAcceleration(-Math.cos(angle)*45-Math.sin(angle)*strafe*110,-Math.sin(angle)*45+Math.cos(angle)*strafe*110);
+      this.actorShadowGraphics.fillStyle(0x02040b,0.32).fillEllipse(enemy.x+3,enemy.y+13,38,16);
+      this.actorDetailGraphics.lineStyle(1.5,enemy.color,0.48).strokeCircle(enemy.x,enemy.y,20);
+      this.drawFacingMark(this.actorDetailGraphics,enemy.x,enemy.y,angle,17,0xf5f7ff);
+
+      // Each rival patrols a unique, slowly rotating flank point around the player.
+      const flank=enemy.aiSlot*Math.PI*2/this.enemies.length+this.elapsed*0.00011*enemy.orbitDirection;
+      const targetX=this.player.x+Math.cos(flank)*enemy.flankRadius,targetY=this.player.y+Math.sin(flank)*enemy.flankRadius;
+      let ax=(targetX-enemy.x)*1.25,ay=(targetY-enemy.y)*1.25;
+      // Separation prevents rivals from collapsing onto one shared point.
+      for(const other of this.enemies){
+        if(other===enemy||!other.alive)continue;
+        const dx=enemy.x-other.x,dy=enemy.y-other.y,d=Math.hypot(dx,dy);
+        if(d>0.1&&d<92){const force=(92-d)*5;ax+=dx/d*force;ay+=dy/d*force;}
       }
+      // Push away from obstacle footprints before their physics collider stops movement.
+      for(const rect of this.obstacleRects){
+        const halfW=rect.w/2+48,halfH=rect.h/2+48,dx=enemy.x-rect.x,dy=enemy.y-rect.y;
+        if(Math.abs(dx)<halfW&&Math.abs(dy)<halfH){
+          const pushX=halfW-Math.abs(dx),pushY=halfH-Math.abs(dy),force=Math.min(260,Math.max(pushX,pushY)*3.5);
+          if(pushX<pushY)ax+=(Math.sign(dx)||((enemy.aiSlot%2)?1:-1))*force;
+          else ay+=(Math.sign(dy)||((enemy.aiSlot%2)?1:-1))*force;
+        }
+      }
+      const accelScale=this.elapsed<enemy.slowUntil?0.24:1;
+      enemy.body.setAcceleration(clamp(ax*accelScale,-260,260),clamp(ay*accelScale,-260,260));
       enemy.attackWait-=dt;
-      if(enemy.attackWait<=0&&dist<620){enemy.attackWait=Phaser.Math.Between(1300,2350);this.enemyFire(enemy,angle);}
+      if(dist<520&&enemy.attackWait>0&&enemy.attackWait<430){
+        const charge=1-enemy.attackWait/430;
+        this.botTelegraphs.lineStyle(2,0xff6478,0.3+charge*0.55).beginPath().moveTo(enemy.x,enemy.y).lineTo(this.player.x,this.player.y).strokePath();
+        this.botTelegraphs.lineStyle(2,0xff8796,0.32+charge*0.55).strokeCircle(enemy.x,enemy.y,22+charge*8);
+      }
+      if(enemy.attackWait<=0){
+        if(dist<520)this.enemyFire(enemy,angle);
+        enemy.attackWait=Phaser.Math.Between(2300,3200);
+      }
     }
     this.projectileClock+=dt;
     this.electricGraphics.clear();
@@ -175,11 +223,17 @@ export default class ArenaScene extends Phaser.Scene {
       }
       shot.life-=dt;
       if(shot.kind==='meteor'&&shot.life<170){this.impactArea(shot.x,shot.y,105,55,0xff9a56);this.killProjectile(shot);continue;}
-      if(shot.life<=0||shot.x<0||shot.y<0||shot.x>WORLD||shot.y>WORLD)this.killProjectile(shot);
-      else if(shot.isFriendly&&this.projectileClock%70<dt)this.particle(shot.x,shot.y,shot.color,2);
+      // Expired shots were destroyed above but the old loop continued and read their removed body.
+      if(shot.life<=0||shot.x<0||shot.y<0||shot.x>WORLD||shot.y>WORLD){this.killProjectile(shot);continue;}
+      if(shot.glow?.active)shot.glow.setPosition(shot.x,shot.y);
+      if(shot.isFriendly&&this.projectileClock%68<dt)this.projectileTrail(shot);
       if(shot.isFriendly&&(shot.kind==='volt'||shot.kind==='storm')){
         const angle=Math.atan2(velocity.y,velocity.x);
         this.drawLightning(this.electricGraphics,shot.x-Math.cos(angle)*34,shot.y-Math.sin(angle)*34,shot.x+Math.cos(angle)*10,shot.y+Math.sin(angle)*10,shot.kind==='storm'?0xd8faff:0xffe16c,this.projectileClock+shot.x);
+      }else if(shot.isFriendly&&shot.kind==='frost'){
+        const angle=Math.atan2(velocity.y,velocity.x),tailX=shot.x-Math.cos(angle)*24,tailY=shot.y-Math.sin(angle)*24;
+        this.electricGraphics.lineStyle(8,0x53e9f2,0.25).beginPath().moveTo(tailX,tailY).lineTo(shot.x,shot.y).strokePath();
+        this.electricGraphics.lineStyle(2,0xe4ffff,0.9).beginPath().moveTo(tailX,tailY).lineTo(shot.x,shot.y).strokePath();
       }
     }
     this.orbs.getChildren().forEach(o=>{if(o.active){o.phase+=dt/350;o.setAlpha(0.73+Math.sin(o.phase)*0.25);}});
@@ -199,6 +253,13 @@ export default class ArenaScene extends Phaser.Scene {
     this.aimGraphics.lineStyle(1,color,0.26).beginPath().moveTo(this.player.x,this.player.y).lineTo(endX,endY).strokePath();
   }
   handColor(key){return SPELLS[key]?.color??0x36e7f2;}
+  drawFacingMark(graphics,x,y,angle,size,color){
+    const tip={x:x+Math.cos(angle)*size,y:y+Math.sin(angle)*size};
+    const left={x:x+Math.cos(angle+2.45)*size*0.58,y:y+Math.sin(angle+2.45)*size*0.58};
+    const right={x:x+Math.cos(angle-2.45)*size*0.58,y:y+Math.sin(angle-2.45)*size*0.58};
+    graphics.fillStyle(color,0.9).fillTriangle(tip.x,tip.y,left.x,left.y,right.x,right.y);
+    graphics.lineStyle(1,0x07111a,0.75).beginPath().moveTo(left.x,left.y).lineTo(tip.x,tip.y).lineTo(right.x,right.y).strokePath();
+  }
 
   cast(card, direction){
     if(!this.gameLive)return;
@@ -206,7 +267,7 @@ export default class ArenaScene extends Phaser.Scene {
     const dir=direction&&Math.hypot(direction.x,direction.y)>0?direction:{x:1,y:0};const angle=Math.atan2(dir.y,dir.x);
     if(card==='blink'){this.blink(angle,520,15);return;}
     if(card==='shadow'){this.blink(angle,480,0);this.impactArea(this.player.x-Math.cos(angle)*80,this.player.y-Math.sin(angle)*80,115,25,0xb48aff,{freeze:2000});return;}
-    if(card==='meteor'){this.blink(angle,440,15);const x=this.player.x+Math.cos(angle)*210,y=this.player.y+Math.sin(angle)*210;this.spawnShot(x,y,angle,0,55,700,0xff9a56,'meteor');return;}
+    if(card==='meteor'){this.blink(angle,440,15);const x=this.player.x+Math.cos(angle)*210,y=this.player.y+Math.sin(angle)*210;this.spawnShot(x,y,angle,55,430,1000,0xff9a56,'meteor');return;}
     if(card==='thermal'){const tx=this.player.x+Math.cos(angle)*360,ty=this.player.y+Math.sin(angle)*360;this.impactArea(tx,ty,155,50,0xffad7d,{freeze:2000});return;}
     if(card==='storm'){for(let i=-1;i<=1;i++){const a=angle+i*0.42;this.spawnShot(this.player.x+Math.cos(a)*30,this.player.y+Math.sin(a)*30,a,45,520,900,0xc4f1ff,'storm');}return;}
     if(card==='plasma'){
@@ -218,7 +279,9 @@ export default class ArenaScene extends Phaser.Scene {
     }
     if(card==='nova'){this.coneAttack(angle,360,1.08,30,0x8cff86,160);return;}
     const config=SPELLS[card];if(!config)return;
-    this.spawnShot(this.player.x+Math.cos(angle)*29,this.player.y+Math.sin(angle)*29,angle,config.damage,620,card==='frost'?1000:760,config.color,card);
+    const speed=card==='fireball'?700:card==='frost'?820:card==='volt'?780:650;
+    const life=card==='frost'?1450:card==='volt'?1350:card==='fireball'?1250:900;
+    this.spawnShot(this.player.x+Math.cos(angle)*34,this.player.y+Math.sin(angle)*34,angle,config.damage,speed,life,config.color,card);
   }
 
   blink(angle,distance,trailDamage){
@@ -232,13 +295,50 @@ export default class ArenaScene extends Phaser.Scene {
   }
 
   spawnShot(x,y,angle,damage,speed,life,color,kind){
-    const shot=this.add.circle(x,y,kind==='plasma'?10:kind==='frost'?7:8,color,1).setStrokeStyle(2,0xffffff,0.7).setDepth(5);
+    const shot=this.add.circle(x,y,kind==='fireball'?10:kind==='frost'?7:kind==='volt'?8:9,color,1).setStrokeStyle(2,0xffffff,0.78).setDepth(5);
     const shotSpeed=Number.isFinite(speed)&&speed>0?speed:620;
     const shotDamage=Number.isFinite(damage)&&damage>0?damage:(SPELLS[kind]?.damage||10);
+    const safeAngle=Number.isFinite(angle)?angle:0;
     this.physics.add.existing(shot);
-    shot.body.setCircle(kind==='nova'?15:8).setAllowGravity(false).setVelocity(Math.cos(angle)*shotSpeed,Math.sin(angle)*shotSpeed);
-    shot.life=Number.isFinite(life)&&life>0?life:800;shot.damage=shotDamage;shot.color=color;shot.kind=kind;shot.isFriendly=true;shot.hit=new Set();shot.bounces=kind==='volt'?1:0;this.projectiles.add(shot);
+    shot.body.setCircle(kind==='nova'?15:kind==='fireball'?10:8).setAllowGravity(false).setCollideWorldBounds(true).setVelocity(Math.cos(safeAngle)*shotSpeed,Math.sin(safeAngle)*shotSpeed);
+    shot.body.onWorldBounds=true;
+    shot.life=Number.isFinite(life)&&life>0?life:800;shot.damage=shotDamage;shot.color=color;shot.kind=kind;shot.isFriendly=true;shot.hit=new Set();shot.bounces=kind==='volt'?1:0;shot.glow=this.add.circle(x,y,kind==='fireball'?18:kind==='volt'?15:12,color,0.2).setStrokeStyle(2,color,0.42).setDepth(4.8);this.projectiles.add(shot);
     this.particle(x,y,color,3);return shot;
+  }
+
+  projectileTrail(shot){
+    if(!shot?.active)return;
+    const count=shot.kind==='fireball'?3:shot.kind==='storm'?2:1;
+    for(let i=0;i<count;i++){
+      const spread=shot.kind==='fireball'?10:shot.kind==='frost'?3:7;
+      const color=shot.kind==='fireball'?Phaser.Math.RND.pick([0xfff0a1,0xff9a56,0xff655a]):shot.color;
+      const dot=this.add.circle(shot.x+Phaser.Math.Between(-spread,spread),shot.y+Phaser.Math.Between(-spread,spread),Phaser.Math.FloatBetween(shot.kind==='fireball'?2:1.5,shot.kind==='fireball'?5:3),color,shot.kind==='fireball'?0.85:0.7).setDepth(4.7);
+      this.tweens.add({targets:dot,alpha:0,scale:0.15,duration:shot.kind==='fireball'?220:150,onComplete:()=>dot.destroy()});
+    }
+  }
+
+  clearProjectiles(){
+    if(!this.projectiles||!this.enemyShots)return;
+    for(const shot of [...this.projectiles.getChildren(),...this.enemyShots.getChildren()])this.killProjectile(shot);
+  }
+
+  retargetVolt(shot,x=shot.x,y=shot.y){
+    const target=this.enemies.filter(e=>e.alive&&!shot.hit.has(e)&&Phaser.Math.Distance.Between(x,y,e.x,e.y)<420)
+      .sort((a,b)=>Phaser.Math.Distance.Between(x,y,a.x,a.y)-Phaser.Math.Distance.Between(x,y,b.x,b.y))[0];
+    if(!target||!shot.body?.velocity){this.killProjectile(shot);return false;}
+    const a=Phaser.Math.Angle.Between(x,y,target.x,target.y);
+    this.flashLightning(x,y,target.x,target.y,shot.color);
+    shot.body.setVelocity(Math.cos(a)*850,Math.sin(a)*850);
+    return true;
+  }
+
+  projectileObstacleHit(shot,obstacle){
+    if(!shot?.active)return;
+    if(shot.kind==='fireball')this.impactArea(shot.x,shot.y,92,shot.damage,shot.color);
+    else if(shot.kind==='frost')this.impactArea(shot.x,shot.y,48,shot.damage,shot.color,{slow:2000});
+    else if(shot.kind==='meteor')this.impactArea(shot.x,shot.y,105,shot.damage,shot.color);
+    else if(shot.kind==='volt'&&shot.bounces>0){shot.bounces--;if(this.retargetVolt(shot,shot.x,shot.y))return;}
+    this.killProjectile(shot);
   }
 
   drawLightning(graphics,x1,y1,x2,y2,color,seed=0){
@@ -271,22 +371,27 @@ export default class ArenaScene extends Phaser.Scene {
     if(shot.kind==='storm'){this.damageEnemy(enemy,shot.damage,shot.color, {knockback:90});}
     else if(shot.kind==='fireball'){this.impactArea(shot.x,shot.y,92,shot.damage,shot.color);this.killProjectile(shot);}
     else if(shot.kind==='frost'){this.damageEnemy(enemy,25,shot.color,{slow:2000});this.particle(shot.x,shot.y,shot.color,12);this.killProjectile(shot);}
-    else if(shot.kind==='volt'&&shot.bounces>0){
+    else if(shot.kind==='volt'&&shot.bounces>0&&shot.body?.velocity){
       this.damageEnemy(enemy,30,shot.color);shot.bounces--;
-      const target=this.enemies.filter(e=>e.alive&&!shot.hit.has(e)&&Phaser.Math.Distance.Between(shot.x,shot.y,e.x,e.y)<320).sort((a,b)=>Phaser.Math.Distance.Between(shot.x,shot.y,a.x,a.y)-Phaser.Math.Distance.Between(shot.x,shot.y,b.x,b.y))[0];
-      if(target){this.flashLightning(shot.x,shot.y,target.x,target.y,shot.color);const a=Phaser.Math.Angle.Between(shot.x,shot.y,target.x,target.y);shot.body.setVelocity(Math.cos(a)*720,Math.sin(a)*720);}
-      else this.killProjectile(shot);
+      if(!this.retargetVolt(shot,shot.x,shot.y))this.killProjectile(shot);
     }
     else {this.damageEnemy(enemy,shot.damage,shot.color);this.killProjectile(shot);}
   }
 
   enemyFire(enemy,angle){
     const shot=this.add.circle(enemy.x,enemy.y,6,enemy.color,0.9).setStrokeStyle(1,0xffe3e8,0.8).setDepth(4);this.physics.add.existing(shot);
-    shot.body.setCircle(6).setAllowGravity(false).setVelocity(Math.cos(angle)*220,Math.sin(angle)*220);
-    shot.life=2600;shot.damage=8;shot.color=enemy.color;shot.kind='enemy';shot.isFriendly=false;this.enemyShots.add(shot);
+    const safeAngle=Number.isFinite(angle)?angle:0;
+    shot.body.setCircle(6).setAllowGravity(false).setCollideWorldBounds(true).setVelocity(Math.cos(safeAngle)*190,Math.sin(safeAngle)*190);shot.body.onWorldBounds=true;
+    shot.life=3000;shot.damage=5;shot.color=enemy.color;shot.kind='enemy';shot.isFriendly=false;shot.glow=this.add.circle(enemy.x,enemy.y,11,enemy.color,0.16).setDepth(3.8);this.enemyShots.add(shot);
   }
-  enemyShotHit(_player,shot){if(!shot.active)return;this.playerHp-=shot.damage;this.killProjectile(shot);this.damageFeedback(-shot.damage);this.cameras.main.shake(95,0.003);if(this.playerHp<=0)this.finishRun();}
-  contactEnemy(enemy){if(!enemy.alive||this.elapsed<(this.invulnerableUntil||0))return;this.playerHp-=7;this.invulnerableUntil=this.elapsed+500;const a=Phaser.Math.Angle.Between(enemy.x,enemy.y,this.player.x,this.player.y);this.player.body.setVelocity(Math.cos(a)*220,Math.sin(a)*220);this.damageFeedback(-7);this.cameras.main.shake(110,0.004);if(this.playerHp<=0)this.finishRun();}
+  enemyShotHit(_player,shot){
+    if(!shot.active)return;
+    this.killProjectile(shot);
+    if(this.elapsed<(this.playerShotShieldUntil||0))return;
+    this.playerShotShieldUntil=this.elapsed+150;this.playerHp-=shot.damage;this.damageFeedback(-shot.damage);this.cameras.main.shake(95,0.003);
+    if(this.playerHp<=0)this.finishRun();
+  }
+  contactEnemy(enemy){if(!enemy.alive||this.elapsed<(this.invulnerableUntil||0))return;this.playerHp-=5;this.invulnerableUntil=this.elapsed+600;const a=Phaser.Math.Angle.Between(enemy.x,enemy.y,this.player.x,this.player.y);this.player.body.setVelocity(Math.cos(a)*220,Math.sin(a)*220);this.damageFeedback(-5);this.cameras.main.shake(110,0.004);if(this.playerHp<=0)this.finishRun();}
 
   damageEnemy(enemy,amount,color,opts={}){
     if(!enemy?.alive)return;enemy.hp-=amount;enemy.score=Math.max(0,enemy.score+Math.round(amount/3));this.damageText(enemy.x,enemy.y,`-${amount}`,color);this.particle(enemy.x,enemy.y,color,8);audioFX.impact();
@@ -303,13 +408,14 @@ export default class ArenaScene extends Phaser.Scene {
   }
   coneAttack(angle,range,halfAngle,damage,color,knockback){
     this.fxGraphics.clear();this.fxGraphics.fillStyle(color,0.12);this.fxGraphics.lineStyle(2,color,0.8);
-    const points=[new Phaser.Math.Vector2(this.player.x,this.player.y)];for(let i=0;i<=16;i++){const a=angle-halfAngle+(i/16)*halfAngle*2;points.push(new Phaser.Math.Vector2(this.player.x+Math.cos(a)*range,this.player.y+Math.sin(a)*range));}
-    this.fxGraphics.fillPoints(points,true);this.fxGraphics.strokePoints(points,true);this.time.delayedCall(220,()=>this.fxGraphics.clear());
+    const points=[];for(let i=0;i<=18;i++){const a=angle-halfAngle+(i/18)*halfAngle*2;points.push(new Phaser.Math.Vector2(this.player.x+Math.cos(a)*range,this.player.y+Math.sin(a)*range));}
+    for(let i=18;i>=0;i--){const a=angle-halfAngle+(i/18)*halfAngle*2;points.push(new Phaser.Math.Vector2(this.player.x+Math.cos(a)*(range-46),this.player.y+Math.sin(a)*(range-46)));}
+    this.fxGraphics.fillPoints(points,true);this.fxGraphics.strokePoints(points,true);this.time.delayedCall(260,()=>this.fxGraphics.clear());
     for(const enemy of this.enemies){if(!enemy.alive)continue;const d=Phaser.Math.Distance.Between(this.player.x,this.player.y,enemy.x,enemy.y),a=Phaser.Math.Angle.Between(this.player.x,this.player.y,enemy.x,enemy.y);if(d<range&&Math.abs(Phaser.Math.Angle.Wrap(a-angle))<halfAngle)this.damageEnemy(enemy,damage,color,{knockback});}
   }
 
   pointLineDist(px,py,x1,y1,x2,y2){const dx=x2-x1,dy=y2-y1,t=clamp(((px-x1)*dx+(py-y1)*dy)/(dx*dx+dy*dy||1),0,1);return Math.hypot(px-(x1+t*dx),py-(y1+t*dy));}
-  killProjectile(shot){if(shot?.active){shot.body?.stop();shot.destroy();}}
+  killProjectile(shot){if(shot?.active){shot.body?.stop();shot.glow?.destroy();shot.destroy();}}
   particle(x,y,color,count=7){for(let i=0;i<count;i++){const dot=this.add.circle(x,y,Phaser.Math.FloatBetween(1.5,3.5),color,0.9).setDepth(10);const a=Math.random()*Math.PI*2,d=Phaser.Math.Between(18,72);this.tweens.add({targets:dot,x:x+Math.cos(a)*d,y:y+Math.sin(a)*d,alpha:0,scale:0,duration:Phaser.Math.Between(220,540),onComplete:()=>dot.destroy()});}}
   damageText(x,y,text,color){const label=this.add.text(x,y,text,{fontFamily:'Barlow Condensed',fontSize:'19px',fontStyle:'bold',color:'#'+color.toString(16).padStart(6,'0'),stroke:'#08101a',strokeThickness:4}).setOrigin(.5).setDepth(14);this.tweens.add({targets:label,y:y-48,alpha:0,duration:760,onComplete:()=>label.destroy()});}
   damageFeedback(amount){this.damageText(this.player.x,this.player.y-20,String(amount),0xff7285);}

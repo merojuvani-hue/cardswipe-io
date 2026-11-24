@@ -15,3 +15,24 @@
 .stick-label b{color:#81a3b8;font-size:7px;font-weight:400}
 @media(max-width:760px){.virtual-stick{left:12px;bottom:max(10px,env(safe-area-inset-bottom));gap:5px}.stick-base{width:78px;height:78px}.stick-knob{width:34px;height:34px}.stick-label{font-size:7px}.card-hand{transform:translateX(28px)}}
 @media(max-width:390px){.virtual-stick{left:8px}.stick-base{width:72px;height:72px}.stick-knob{width:31px;height:31px}.card-hand{transform:translateX(31px)}}
+
+
+/* Mobile: reserve a clear lane beside the thumb stick and make fusion drops explicit. */
+.spell-card.fusion-target{transform:translateY(-9px) scale(1.04);border-color:#f1aaff;box-shadow:0 0 0 2px #e8a3ff55,0 0 28px #da86ff77,inset 0 0 24px #da86ff22}
+.cast-ghost{max-width:calc(100vw - 24px);white-space:normal;text-align:center;line-height:1.5}
+@media(max-width:760px){
+  .arena-bottom{justify-content:flex-end;padding:0 10px;gap:0}
+  .card-hand{width:calc(100% - 82px);margin-left:82px;transform:none;justify-content:flex-end;gap:clamp(4px,1.2vw,8px)}
+  .spell-card{width:clamp(64px,21vw,84px);min-width:0}
+  .cast-ghost{font-size:clamp(7px,2.4vw,9px);padding:9px 11px}
+}
+@media(max-width:390px){
+  .arena-bottom{padding:0 8px}
+  .card-hand{width:calc(100% - 72px);margin-left:72px;gap:4px}
+  .spell-card{width:clamp(60px,20vw,75px);height:88px;padding:7px}
+  .spell-card .card-meta{font-size:6px}
+}
+
+/* Keep the mobile skin controls clear of the fixed Home Screen deck strip. */
+@media(max-width:760px){.showcase-caption{bottom:48px}.skin-picker{bottom:28px}}
+@media(max-width:390px){.showcase-caption{bottom:52px}.skin-picker{bottom:32px}}
