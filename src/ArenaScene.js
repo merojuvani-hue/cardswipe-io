@@ -162,6 +162,7 @@ export default class ArenaScene extends Phaser.Scene {
     this.electricGraphics.clear();
     for(const shot of [...this.projectiles.getChildren(),...this.enemyShots.getChildren()]){
       if(!shot.active)continue;
+      if(!shot.body?.velocity){this.killProjectile(shot);continue;}
       shot.life-=dt;
       if(shot.kind==='meteor'&&shot.life<170){this.impactArea(shot.x,shot.y,105,55,0xff9a56);this.killProjectile(shot);continue;}
       if(shot.life<=0||shot.x<0||shot.y<0||shot.x>WORLD||shot.y>WORLD)this.killProjectile(shot);
