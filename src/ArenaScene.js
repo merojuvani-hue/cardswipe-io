@@ -109,7 +109,7 @@ export default class ArenaScene extends Phaser.Scene {
       const radius = Phaser.Math.Between(300,850);
       const x = clamp(this.player.x + Math.cos(angle)*radius,100,WORLD-100), y = clamp(this.player.y + Math.sin(angle)*radius,100,WORLD-100);
       const enemy = this.add.circle(x,y,18,COLORS[i],1).setStrokeStyle(2,0xffffff,0.7).setDepth(4);
-      this.physics.add.existing(enemy); enemy.body.setCircle(16).setCollideWorldBounds(true).setDamping(true).setDrag(500).setMaxVelocity(185,185);
+      this.physics.add.existing(enemy); enemy.body.setCircle(16).setCollideWorldBounds(true).setDamping(true).setDrag(700).setMaxVelocity(100,100);
       enemy.hp = 70; enemy.maxHp = 70; enemy.alive = true; enemy.name = NAMES[i]; enemy.color = COLORS[i]; enemy.score = 0; enemy.kills = 0; enemy.attackWait = Phaser.Math.Between(600,1500); enemy.slowUntil = 0; enemy.lastShot = 0;
       enemy.label = this.add.text(x,y-34,enemy.name,{fontFamily:'Space Mono',fontSize:'9px',color:'#e7efff',stroke:'#080b16',strokeThickness:3}).setOrigin(0.5).setDepth(8);
       enemy.hpGraphics = this.add.graphics().setDepth(8); this.enemiesGroup.add(enemy); this.enemies.push(enemy);
@@ -152,9 +152,15 @@ export default class ArenaScene extends Phaser.Scene {
       enemy.hpGraphics.fillStyle(0x101725,0.88).fillRect(enemy.x-19,enemy.y-27,38,4);
       enemy.hpGraphics.fillStyle(enemy.hp>25?0x64f4c2:0xff6277,1).fillRect(enemy.x-19,enemy.y-27,38*clamp(enemy.hp/enemy.maxHp,0,1),4);
       const dist=Phaser.Math.Distance.Between(enemy.x,enemy.y,this.player.x,this.player.y), angle=Phaser.Math.Angle.Between(enemy.x,enemy.y,this.player.x,this.player.y);
-      if(this.elapsed<enemy.slowUntil) enemy.body.setVelocity(enemy.body.velocity.x*0.98,enemy.body.velocity.y*0.98);
-      else if(dist>100){const speed=enemy.slowUntil&&this.elapsed<enemy.slowUntil?60:105; enemy.body.setAcceleration(Math.cos(angle)*speed*5,Math.sin(angle)*speed*5);}
-      else enemy.body.setAcceleration(-Math.cos(angle)*80,-Math.sin(angle)*80);
+      if(this.elapsed<enemy.slowUntil) enemy.body.setVelocity(enemy.body.velocity.x*0.94,enemy.body.velocity.y*0.94);
+      else if(dist>125){
+        // Rivals deliberately close on the player, but with a lower top speed.
+        enemy.body.setAcceleration(Math.cos(angle)*300,Math.sin(angle)*300);
+      } else {
+        // Circle at close range instead of fleeing, keeping the player in combat.
+        const strafe=(enemy.name.length%2?1:-1);
+        enemy.body.setAcceleration(-Math.cos(angle)*45-Math.sin(angle)*strafe*110,-Math.sin(angle)*45+Math.cos(angle)*strafe*110);
+      }
       enemy.attackWait-=dt;
       if(enemy.attackWait<=0&&dist<620){enemy.attackWait=Phaser.Math.Between(1300,2350);this.enemyFire(enemy,angle);}
     }
@@ -162,13 +168,17 @@ export default class ArenaScene extends Phaser.Scene {
     this.electricGraphics.clear();
     for(const shot of [...this.projectiles.getChildren(),...this.enemyShots.getChildren()]){
       if(!shot.active)continue;
-      if(!shot.body?.velocity){this.killProjectile(shot);continue;}
+      const velocity=shot.body?.velocity;
+      if(!velocity||!Number.isFinite(velocity.x)||!Number.isFinite(velocity.y)){
+        this.killProjectile(shot);
+        continue;
+      }
       shot.life-=dt;
       if(shot.kind==='meteor'&&shot.life<170){this.impactArea(shot.x,shot.y,105,55,0xff9a56);this.killProjectile(shot);continue;}
       if(shot.life<=0||shot.x<0||shot.y<0||shot.x>WORLD||shot.y>WORLD)this.killProjectile(shot);
       else if(shot.isFriendly&&this.projectileClock%70<dt)this.particle(shot.x,shot.y,shot.color,2);
       if(shot.isFriendly&&(shot.kind==='volt'||shot.kind==='storm')){
-        const angle=Math.atan2(shot.body.velocity.y,shot.body.velocity.x);
+        const angle=Math.atan2(velocity.y,velocity.x);
         this.drawLightning(this.electricGraphics,shot.x-Math.cos(angle)*34,shot.y-Math.sin(angle)*34,shot.x+Math.cos(angle)*10,shot.y+Math.sin(angle)*10,shot.kind==='storm'?0xd8faff:0xffe16c,this.projectileClock+shot.x);
       }
     }
@@ -223,8 +233,11 @@ export default class ArenaScene extends Phaser.Scene {
 
   spawnShot(x,y,angle,damage,speed,life,color,kind){
     const shot=this.add.circle(x,y,kind==='plasma'?10:kind==='frost'?7:8,color,1).setStrokeStyle(2,0xffffff,0.7).setDepth(5);
-    this.physics.add.existing(shot);shot.body.setCircle(kind==='nova'?15:8).setAllowGravity(false);shot.body.setVelocity(Math.cos(angle)*speed,Math.sin(angle)*speed);
-    shot.life=life;shot.damage=damage;shot.color=color;shot.kind=kind;shot.isFriendly=true;shot.hit=new Set();shot.bounces=kind==='volt'?1:0;this.projectiles.add(shot);
+    const shotSpeed=Number.isFinite(speed)&&speed>0?speed:620;
+    const shotDamage=Number.isFinite(damage)&&damage>0?damage:(SPELLS[kind]?.damage||10);
+    this.physics.add.existing(shot);
+    shot.body.setCircle(kind==='nova'?15:8).setAllowGravity(false).setVelocity(Math.cos(angle)*shotSpeed,Math.sin(angle)*shotSpeed);
+    shot.life=Number.isFinite(life)&&life>0?life:800;shot.damage=shotDamage;shot.color=color;shot.kind=kind;shot.isFriendly=true;shot.hit=new Set();shot.bounces=kind==='volt'?1:0;this.projectiles.add(shot);
     this.particle(x,y,color,3);return shot;
   }
 
@@ -269,7 +282,8 @@ export default class ArenaScene extends Phaser.Scene {
 
   enemyFire(enemy,angle){
     const shot=this.add.circle(enemy.x,enemy.y,6,enemy.color,0.9).setStrokeStyle(1,0xffe3e8,0.8).setDepth(4);this.physics.add.existing(shot);
-    shot.body.setCircle(6).setAllowGravity(false).setVelocity(Math.cos(angle)*220,Math.sin(angle)*220);shot.life=2600;shot.damage=8;this.enemyShots.add(shot);
+    shot.body.setCircle(6).setAllowGravity(false).setVelocity(Math.cos(angle)*220,Math.sin(angle)*220);
+    shot.life=2600;shot.damage=8;shot.color=enemy.color;shot.kind='enemy';shot.isFriendly=false;this.enemyShots.add(shot);
   }
   enemyShotHit(_player,shot){if(!shot.active)return;this.playerHp-=shot.damage;this.killProjectile(shot);this.damageFeedback(-shot.damage);this.cameras.main.shake(95,0.003);if(this.playerHp<=0)this.finishRun();}
   contactEnemy(enemy){if(!enemy.alive||this.elapsed<(this.invulnerableUntil||0))return;this.playerHp-=7;this.invulnerableUntil=this.elapsed+500;const a=Phaser.Math.Angle.Between(enemy.x,enemy.y,this.player.x,this.player.y);this.player.body.setVelocity(Math.cos(a)*220,Math.sin(a)*220);this.damageFeedback(-7);this.cameras.main.shake(110,0.004);if(this.playerHp<=0)this.finishRun();}
