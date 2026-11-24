@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#070912" />
+    <meta name="description" content="CardSwipe.io — fuse magic, read the arena, survive the swarm." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>CardSwipe.io — Neon Arena</title>
+  </head>
+  <body>
+    <main id="app">
+      <div id="game" aria-label="CardSwipe.io arena game"></div>
+      <div id="home-screen" class="screen home-screen">
+        <div class="home-grid"></div>
+        <header class="brand"><span class="brand-mark"><i></i><i></i><i></i></span><span>CARDSWIPE<span class="brand-dot">.IO</span></span><small>ARCANE ARENA</small></header>
+        <div class="home-layout">
+          <section class="hero-copy">
+            <div class="eyebrow"><span class="pulse-dot"></span> THE ARENA IS LIVE</div>
+            <h1>DRAW.<br /><em>FUSE.</em><br />DOMINATE.</h1>
+            <p>Three cards. Twelve rivals. One way out.</p>
+            <label class="name-field"><span>YOUR CALLSIGN</span><input id="player-name" maxlength="14" value="Player" autocomplete="off" /></label>
+            <button id="enter-arena" class="primary-button"><span>ENTER ARENA</span><b>↗</b></button>
+            <div class="home-foot"><span>WASD / ARROWS TO MOVE</span><span>DRAG A CARD TO CAST</span></div>
+          </section>
+          <section class="showcase">
+            <div class="showcase-orbit orbit-a"></div><div class="showcase-orbit orbit-b"></div>
+            <div class="hero-sigil"><div class="sigil-core"><span>✦</span></div><div class="sigil-ring"></div><div class="sigil-glint"></div></div>
+            <div class="showcase-caption"><span>YOUR VESSEL</span><strong id="skin-title">ARCANE CYAN</strong></div>
+            <div class="skin-picker" aria-label="Choose aura">
+              <button class="skin-option active" data-skin="Arcane Cyan" data-color="#36e7f2" style="--skin:#36e7f2" aria-label="Arcane Cyan"></button>
+              <button class="skin-option" data-skin="Inferno Red" data-color="#ff4f65" style="--skin:#ff4f65" aria-label="Inferno Red"></button>
+              <button class="skin-option" data-skin="Venom Green" data-color="#9bff63" style="--skin:#9bff63" aria-label="Venom Green"></button>
+              <button class="skin-option" data-skin="Solar Gold" data-color="#ffc85b" style="--skin:#ffc85b" aria-label="Solar Gold"></button>
+            </div>
+            <div class="stat-chip"><span>RANKED BY</span><b>PURE CHAOS</b></div>
+          </section>
+        </div>
+        <footer class="home-guide"><div class="guide-title"><span>THE ARCANE DECK</span><small>LEARN THE FLOW</small></div>
+          <div class="guide-cards"><div class="mini-card fire"><span>01</span><b>FIREBALL</b><i>↗</i></div><div class="guide-arrow">DRAG TO AIM <b>→</b></div><div class="mini-card ice"><span>02</span><b>FROST SHARD</b><i>❄</i></div><div class="guide-fuse">FUSE TWO <b>＋</b></div><div class="mini-card fused"><span>ULT</span><b>PLASMA BEAM</b><i>ϟ</i></div></div>
+          <div class="guide-note"><span>01</span> DRAG A CARD INTO THE ARENA TO AIM A SPELL <span class="note-divider">/</span><span>02</span> DROP ONE CARD ON ANOTHER TO FUSE AN ULTIMATE</div>
+        </footer>
+      </div>
+      <div id="arena-hud" class="arena-hud hidden">
+        <div class="hud-top"><div class="health-panel"><button id="home-button" class="home-mini">← HOME</button><div class="health-copy"><span>VITALS <b id="hp-label">100 / 100</b></span><div class="health-track"><i id="hp-fill"></i></div></div><div class="score-mini"><span>SCORE</span><b id="score-label">0000</b></div></div>
+          <div class="leaderboard"><div class="leader-title">LIVE RANKING <span>TOP 5</span></div><ol id="leader-list"></ol></div></div>
+        <div class="arena-bottom"><div id="move-stick" class="virtual-stick" aria-label="Virtual joystick"><div class="stick-base"><span id="stick-knob" class="stick-knob"></span></div><span class="stick-label">MOVE <b>TO STEER</b></span></div><div id="card-hand" class="card-hand" aria-label="Spell card hand"></div><div class="aim-tip">DRAG UP TO AIM <span>⌃</span></div></div>
+        <div id="cast-ghost" class="cast-ghost hidden"></div>
+      </div>
+      <div id="game-over" class="screen game-over hidden"><div class="game-over-grid"></div><div class="result-kicker">THE ARENA HAS CHOSEN</div><h2>RUN<br /><em>ENDED</em></h2><div class="result-card"><div><span>KILLS</span><b id="final-kills">0</b></div><div><span>SCORE</span><b id="final-score">0</b></div><div><span>FINAL RANK</span><b id="final-rank">#12</b></div></div><button id="play-again" class="primary-button"><span>PLAY AGAIN</span><b>↻</b></button><button id="gameover-home" class="text-button">HOME SCREEN <span>→</span></button></div>
+      <div id="toast" class="toast hidden"></div>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
